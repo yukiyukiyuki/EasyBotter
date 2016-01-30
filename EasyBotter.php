@@ -1,7 +1,8 @@
 <?php
 //============================================================
 //EasyBotter Ver2.1.2
-//updated 2013/01/08
+//updated 2013/01/08 by pha
+//modified 2016/01/30 by yuki(★部分)
 //============================================================
 class EasyBotter
 {    
@@ -98,6 +99,19 @@ class EasyBotter
 //============================================================
 //bot.phpから直接呼び出す、基本の５つの関数
 //============================================================
+
+    //★ある発言を単発でポストする
+    function postone($status = "*sigh*"){
+        if(empty($status)){
+            $message = "投稿するメッセージがないようです。<br />";
+            echo $message;
+            return array("error"=> $message);
+        }else{
+            $status = $this->convertText($status);
+            $response = $this->setUpdate(array("status"=>$status));
+            return $this->showResult($response);
+        }
+    }
 
     //ランダムにポストする
     function postRandom($datafile = "data.txt"){        
@@ -242,12 +256,135 @@ class EasyBotter
         }            
     }
 
+
+//============================================================
+//yukiが作った余分な機能
+//============================================================
+
+    //★聞かれたら天気を教える
+    function tenkiasked($city){
+        $today = date('j日');
+        $msgs = array();
+        $status = '';
+        
+        $tenki_url = "http://weather.livedoor.com/forecast/rss/area/".$city.".xml";
+        
+        $xml = file_get_contents($tenki_url);
+        $tenki = simplexml_load_string($xml);
+        
+        foreach($tenki->channel->item as $k => $v){
+            $content = (string)$v->title;
+            if (strstr($content,$today)){
+                preg_match_all('/\- (.*?) \- 最高気温/',$content,$m);//天気の文字部分を抽出
+                preg_match_all('/最高気温(.*?)℃/',$content,$t);//最高気温を抽出
+                $msg = $m[1][0];
+                $htemp = $t[1][0];
+            }
+        }
+        
+        if ($msg){
+            if(empty($htemp)){//時間帯によっては最高気温が空欄になるのでその対策
+                $comm = array("今日の[[cityname]]の天気は".$msg."だそうです。最高気温の記載はないですね。","[[cityname]]ですね…今日の天気は".$msg."だそうです。最高気温の記載はこの時間だとないですね。",);//同じセリフだとつまらないので何種類か。
+                $status = $comm[array_rand($comm)];
+            }else{
+                $comm = array("今日の[[cityname]]の天気は".$msg."で最高気温".$htemp."℃だそうですよ。","[[cityname]]ですね…えぇと、今日は".$msg."で、最高気温は".$htemp."℃だそうです。",);
+                $status = $comm[array_rand($comm)];
+            }
+            return $status;
+        }else{//何らかの理由でデータが取得できなかった時用
+            $status = "…あれ？すみません、情報サイトからデータが取れなくてお教えできません。時間をおいて再挑戦して頂けますか？";
+            return $status;
+        }
+    }
+
+    //★しりとり
+    function siritori($sirigiven = ""){
+        //もらった言葉の読みを、Yahoo!形態素解析に教えてもらう。
+        //$appid=''の''内に、自分のYahoo!アプリケーションIDを記入して下さい。
+        $appid = '';
+        $sirigiven = $this->_mMAParse($sirigiven, $appid);//Yahoo!に形態素解析してもらう
+        $sirigiven = $this->_mXmlParse($sirigiven, 'reading');
+        $sirigiven = implode('',$sirigiven);
+        $lastsiri = mb_substr($sirigiven,-1,1,"utf-8");//最後の一文字get
+
+        if(preg_match("/^[ぁ-ん]+$/u",$lastsiri) == 0){//最後の一文字の読み仮名がひらがなじゃない場合（！やーなど）
+            $lastsiri = mb_substr($sirigiven,-2,1,"utf-8");//最後のふた文字get。これでもだめなら分からないことにします。
+        }
+        if($lastsiri == "ん"){
+            $status = "あっ ぼくの かちです （きゃっきゃ";//相手が負けた時の反応をここに
+        }elseif($lastsiri){
+            if(!$timeline){
+                $timeline = $this->selectTweets($this->getFriendsTimeline(NULL,100));
+            }
+            if((bool)$timeline){
+                $meishi = array();
+                foreach($timeline as $tweet){
+                    $twtext = str_replace('&amp;', '&', $tweet["text"]);
+                    $text .= $twtext;
+                }
+                    $text = $this->_mMAParse($text, $appid);
+                    var_dump($text);
+                    $tango = $this->_mXmlParse($text, 'surface');//surfaceは"単語"
+                    $tangoyomi = $this->_mXmlParse($text, 'reading');//readingは"読みがな"
+                    $hinshi = $this->_mXmlParse($text, 'pos');//posは"品詞"
+                    //名詞だけ集める
+                    foreach($hinshi as $key => $val){
+                        if(preg_match("@名詞@u",$val,$matches) === 1){
+                            if(mb_strlen($tangoyomi[$key]) > 1 && preg_match("/(^[!-~ｗ]+$|^い$|^な$|^とき$|^こと$|^かた$|^ほう$|^っ$|^ホモ$|^ほも$|^ﾎﾓ$|^ちん|^チン|^ﾁﾝ|レイプ|ﾚｲﾌﾟ|姦|セックス|せっくす|ｾｯｸｽ|性|交|^うん|^ウン|^ｳﾝ|^金玉|漏|^[こそあど]れ$|^はい$|^やめ$|^ァ$)/",$tango[$key],$matches) === 0 && mb_substr($tangoyomi[$key],0,1,"utf-8") == $lastsiri){//真ん中のpreg_matchは除外ワード。ご自由に追加してください。
+                                $meishi[] = $tango[$key];
+                            }
+                        }
+                    }
+                
+            }
+            if($meishi){
+                $siri = $meishi[array_rand($meishi)];
+                if(mb_substr($siri,-1,1,"utf-8") == "ん"){//「ん」で終わる言葉を言ってしまった時のセリフ。$lastsiriは相手の言った単語のラスト1文字、$siriは返す単語。
+                    $status = array("えっと えっと 『".$siri."』？ あっ！","えっと あっ 『".$siri."』 ？？","『".$lastsiri."』 ですね うー 『".$siri."』？ あっ",);
+                    $status = $status[array_rand($status)];
+                }else{//普通に答えられた時のセリフ
+                    $status = array("えっと えっと 『".$siri."』","えっと あっ 『".$siri."』 ？？","『".$lastsiri."』 ですね うー あっ 『".$siri."』！",);
+                    $status = $status[array_rand($status)];
+                }
+            }else{//該当する言葉が見当たらなかった時のセリフ
+                $status = array("あの えっと えっと   わかんない です （しょぼ","えっと えっと   わかんない （しょぼ",);
+                $status = $status[array_rand($status)];
+            }
+        return $status;
+        }
+    }
+    
+    //★しりとりで使う関数。Yahoo!から形態素解析の結果をもらう。
+    //wktkさんの関数を使用させて頂いています。https://github.com/wktk/markov4eb
+    function _mMAParse($text, $appid){
+        require_once 'HTTP/Request2.php';
+        $url = 'http://jlp.yahooapis.jp/MAService/V1/parse';
+        $http = new HTTP_Request2($url, HTTP_Request2::METHOD_POST);
+        // パラメータの設定
+        $http->addPostParameter( array(
+                                       'results'   => 'ma',
+                                       'appid'     =>  $appid,
+                                       'response'  => 'surface,pos,reading',
+                                       'sentence'  =>  $text,
+                                       ));
+        // 送信･取得
+        return $http->send()->getBody();
+    }
+    
+    //★しりとりで使う関数。XMLから必要な部分を切り出す。
+    function _mXmlParse($xml, $pat){
+        preg_match_all("/<".$pat.">(.+?)<\/".$pat.">/", $xml, $match);
+            return $match[1];
+    }
+
+
+        
 //============================================================
 //上の５つの関数から呼び出す関数
 //============================================================
     
     //発言を作る
-    function makeTweet($file, $number = FALSE){    
+    function makeTweet($file, $number = FALSE){
         //txtファイルの中身を配列に格納
         if(empty($this->_tweetData[$file])){
             $this->_tweetData[$file] = $this->readDataFile($file);        
@@ -271,8 +408,20 @@ class EasyBotter
         
         foreach($replies as $reply){        
             $status = "";
+            //★ここからしりとり改造
+            if(preg_match("@(『.*』)@u",$reply["text"],$matches)){
+                $sirigiven = str_replace("『","",$matches[0]);
+                $sirigiven = str_replace("』","",$sirigiven);
+                
+                if(mb_substr($sirigiven,-1,1,"utf-8") == "ん"){//最後の一文字が既にひらがなの「ん」の場合。Yahoo!に渡さず終了。
+                    $status = "あっ ぼくの かちです （きゃっきゃ";
+                }else{
+                    $status = $this->siritori($sirigiven);
+                }
+            }//★しりとりここまで。正確には下記のelseifのelseまで。
+                    
             //指定されたリプライパターンと照合
-            if(!empty($this->_replyPatternData[$replyPatternFile])){
+            elseif(!empty($this->_replyPatternData[$replyPatternFile])){
                 foreach($this->_replyPatternData[$replyPatternFile] as $pattern => $res){
                     if(preg_match("@".$pattern."@u",$reply["text"], $matches) === 1){                                        
                         $status = $res[array_rand($res)];
@@ -298,6 +447,22 @@ class EasyBotter
             $status .= $this->_footer;
             //リプライ相手、リプライ元を付与
             $re["status"] = "@".$reply["user"]["screen_name"]." ".$status;
+            
+            //★以下天気用改造
+            switch(true){
+                case stristr($status, "[[tenki]]"):
+                    $cdata = explode("・",$status);
+                    $city = $cdata[1];
+                    $cityname = $cdata[2];
+                    $status = $this->tenkiasked($city);
+                    $status = str_replace("[[cityname]]",$cityname,$status);
+                    $re["status"] = "@".$reply["user"]["screen_name"]." ".$status;
+                    break;
+                default:
+                    $re["status"] = "@".$reply["user"]["screen_name"]." ".$status;
+            }
+            //★天気ここまで
+            
             $re["in_reply_to_status_id"] = $reply["id_str"];
             
             //応急処置
@@ -507,12 +672,12 @@ class EasyBotter
 	}
 
     function setUpdate($value){        
-        $url = "http://api.twitter.com/1.1/statuses/update.json";
+        $url = "https://api.twitter.com/1.1/statuses/update.json";
         return $this->_setData($url,$value);
     }            
 
     function getReplies($since_id = NULL){
-        $url = "http://api.twitter.com/1.1/statuses/mentions_timeline.json?";        
+        $url = "https://api.twitter.com/1.1/statuses/mentions_timeline.json?";
         if ($since_id) {
             $url .= 'since_id=' . $since_id ."&";
         }

@@ -1,8 +1,8 @@
 <?php
 //設定
 $screen_name = ""; //botのid名
-$consumer_key = "WtNt5W6js77cFHvKyVgf6Q"; // Consumer keyの値
-$consumer_secret = "h3In28YiiRxtg4PTpkhPmrlJSGOCTG2oh3hslQ"; // Consumer secretの値
+$consumer_key = ""; // Consumer keyの値
+$consumer_secret = ""; // Consumer secretの値
 $access_token = ""; // Access Tokenの値
 $access_token_secret = ""; // Access Token Secretの値
 
